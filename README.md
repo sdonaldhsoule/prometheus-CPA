@@ -1,4 +1,7 @@
-# 🎁 凭证捐赠站 (Donation Station)
+# 🎁 Prometheus-CPA (凭证捐赠站)
+
+[![Docker Image](https://img.shields.io/docker/v/123nhh/prometheus-cpa?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/123nhh/prometheus-cpa)
+[![GitHub](https://img.shields.io/badge/GitHub-123nhh%2Fprometheus--CPA-blue?logo=github)](https://github.com/123nhh/prometheus-CPA)
 
 一个独立部署的凭证捐赠站系统，通过调用 CLIProxyAPI (CPA) 的管理接口实现 OAuth 授权流程，用户完成授权后自动生成 CDK。
 
@@ -94,16 +97,42 @@ juanzeng/
 
 ---
 
-### 方法一：使用 Docker Compose (推荐)
+### 方法一：使用 Docker 镜像 (最简单)
 
-这是最简单的部署方式，包含自动配置的 PostgreSQL 数据库。
+直接从 Docker Hub 拉取预构建镜像：
+
+```bash
+# 拉取镜像
+docker pull 123nhh/prometheus-cpa:latest
+```
+
+然后下载 docker-compose.yml 并启动：
+
+```bash
+# 下载配置文件
+curl -O https://raw.githubusercontent.com/123nhh/prometheus-CPA/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/123nhh/prometheus-CPA/main/.env.example
+cp .env.example .env
+
+# 编辑配置
+nano .env
+
+# 启动服务
+docker compose up -d
+```
+
+---
+
+### 方法二：使用 Docker Compose 构建 (推荐开发)
+
+从源码构建，适合需要自定义修改的用户。
 
 #### 第一步：获取项目
 
 ```bash
 # 克隆项目到本地
 git clone https://github.com/123nhh/prometheus-CPA.git
-cd donation-CPA
+cd prometheus-CPA
 ```
 
 #### 第二步：创建配置文件
@@ -184,7 +213,7 @@ donation-station  | [GIN] Listening and serving HTTP on :8080
 
 ---
 
-### 方法二：本地开发
+### 方法三：本地开发
 
 适合需要修改代码或调试的开发者。
 
@@ -236,33 +265,37 @@ go run cmd/server/main.go
 
 ```bash
 # 查看运行状态
-docker-compose ps
+docker compose ps
 
 # 查看日志
-docker-compose logs -f donation-station
+docker compose logs -f prometheus-cpa
 
 # 重启服务
-docker-compose restart donation-station
+docker compose restart prometheus-cpa
 
 # 停止所有服务
-docker-compose down
+docker compose down
 
 # 停止并删除数据 (谨慎使用!)
-docker-compose down -v
+docker compose down -v
 
-# 更新到最新版本
+# 更新镜像到最新版本
+docker compose pull
+docker compose up -d
+
+# 从源码更新
 git pull
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### 数据备份
 
 ```bash
 # 备份数据库
-docker-compose exec postgres pg_dump -U donation donation_station > backup.sql
+docker compose exec postgres pg_dump -U donation donation_station > backup.sql
 
 # 恢复数据库
-cat backup.sql | docker-compose exec -T postgres psql -U donation donation_station
+cat backup.sql | docker compose exec -T postgres psql -U donation donation_station
 ```
 
 ## ⚙️ 配置说明
