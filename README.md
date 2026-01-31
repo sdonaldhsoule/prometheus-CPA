@@ -54,7 +54,7 @@
 ## 📁 项目结构
 
 ```
-juanzeng/
+prometheus-CPA/
 ├── cmd/
 │   └── server/
 │       └── main.go           # 应用入口
