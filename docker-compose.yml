@@ -1,0 +1,50 @@
+services:
+  donation-station:
+    build: .
+    container_name: donation-station
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://donation:donation123@postgres:5432/donation_station?sslmode=disable
+      - PORT=8080
+      - CPA_BASE_URL=${CPA_BASE_URL:-}
+      - CPA_MANAGEMENT_KEY=${CPA_MANAGEMENT_KEY:-}
+      - CALLBACK_URL=${CALLBACK_URL:-}
+      - CALLBACK_SECRET=${CALLBACK_SECRET:-your-callback-secret}
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}
+      - CDK_PREFIX=${CDK_PREFIX:-DS}
+      - SITE_NAME=${SITE_NAME:-凭证捐赠站}
+      - BACKGROUND_IMAGE=${BACKGROUND_IMAGE:-}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - donation-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: donation-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=donation
+      - POSTGRES_PASSWORD=donation123
+      - POSTGRES_DB=donation_station
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U donation -d donation_station"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - donation-network
+
+volumes:
+  postgres_data:
+
+networks:
+  donation-network:
+    driver: bridge

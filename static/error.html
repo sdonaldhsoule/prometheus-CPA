@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>操作失败 - 凭证捐赠站</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: #0f3460;
+            --text-primary: #e8e8e8;
+            --text-secondary: #a0a0a0;
+            --accent: #e94560;
+            --error: #ef4444;
+            --border: #2a2a4a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.85) 100%);
+            z-index: -1;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .error-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-10px); }
+            40%, 80% { transform: translateX(10px); }
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: var(--error);
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+        }
+
+        .error-detail {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+            border: 1px solid var(--error);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .error-detail h3 {
+            color: var(--error);
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+
+        .error-detail p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .error-code {
+            background: var(--bg-primary);
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: var(--error);
+            margin-top: 10px;
+            display: inline-block;
+        }
+
+        .back-btn {
+            display: inline-block;
+            padding: 14px 30px;
+            background: linear-gradient(135deg, var(--accent) 0%, #ff6b6b 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 25px -5px rgba(233, 69, 96, 0.4);
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px -5px rgba(233, 69, 96, 0.5);
+        }
+
+        .help-section {
+            margin-top: 25px;
+            padding: 15px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            text-align: left;
+        }
+
+        .help-section h4 {
+            color: var(--accent);
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .help-section ul {
+            list-style: none;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .help-section li {
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .help-section li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 25px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">😔</div>
+        <h1>操作失败</h1>
+        <p class="subtitle">很抱歉，出现了一些问题</p>
+
+        <div class="error-detail">
+            <h3>❌ 错误信息</h3>
+            <p id="errorMessage">发生未知错误</p>
+            <div class="error-code" id="errorCode"></div>
+        </div>
+
+        <a href="/" class="back-btn">重新尝试</a>
+
+        <div class="help-section">
+            <h4>💡 可能的原因</h4>
+            <ul>
+                <li>该凭证已被捐赠过</li>
+                <li>授权过程被取消或超时</li>
+                <li>凭证验证失败</li>
+                <li>网络连接问题</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const errorMessages = {
+            'access_denied': '您取消了授权，请重新尝试。',
+            'credential_exists': '该凭证已经被捐赠过，无法重复捐赠。',
+            'exchange_failed': '授权码交换失败，请重新尝试。',
+            'missing_parameters': '回调参数缺失，请重新尝试。',
+            'server_error': '服务器内部错误，请稍后重试。',
+            'save_failed': '保存凭证失败，请稍后重试。',
+            'cdk_generate_failed': 'CDK 生成失败，请联系管理员。',
+            'cdk_save_failed': 'CDK 保存失败，请联系管理员。'
+        };
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const errorCode = urlParams.get('message') || 'unknown';
+
+        document.getElementById('errorCode').textContent = errorCode;
+        document.getElementById('errorMessage').textContent = 
+            errorMessages[errorCode] || '发生未知错误，请稍后重试或联系管理员。';
+
+        // 加载站点配置设置背景
+        async function loadSiteConfig() {
+            try {
+                const response = await fetch('/api/site-config');
+                const config = await response.json();
+                
+                if (config.background_image) {
+                    document.body.style.backgroundImage = `url('${config.background_image}')`;
+                }
+            } catch (error) {
+                console.error('Failed to load site config:', error);
+            }
+        }
+
+        loadSiteConfig();
+    </script>
+</body>
+</html>

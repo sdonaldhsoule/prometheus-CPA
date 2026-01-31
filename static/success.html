@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>捐赠成功 - 凭证捐赠站</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: #0f3460;
+            --text-primary: #e8e8e8;
+            --text-secondary: #a0a0a0;
+            --accent: #e94560;
+            --success: #4ade80;
+            --border: #2a2a4a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.85) 100%);
+            z-index: -1;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .success-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            animation: bounceIn 0.6s ease;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: var(--success);
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+        }
+
+        .email-display {
+            background: var(--bg-secondary);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .email-display strong {
+            color: var(--text-primary);
+        }
+
+        .cdk-section {
+            background: linear-gradient(135deg, rgba(74, 222, 128, 0.15) 0%, rgba(34, 197, 94, 0.1) 100%);
+            border: 1px solid var(--success);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .cdk-section h3 {
+            color: var(--success);
+            margin-bottom: 15px;
+            font-size: 1rem;
+        }
+
+        .cdk-display {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid var(--border);
+            word-break: break-all;
+        }
+
+        .cdk-display:hover {
+            border-color: var(--success);
+            transform: scale(1.02);
+        }
+
+        .copy-hint {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 10px;
+        }
+
+        .copy-hint.copied {
+            color: var(--success);
+        }
+
+        .back-btn {
+            display: inline-block;
+            padding: 14px 30px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .notice {
+            margin-top: 25px;
+            padding: 15px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-align: left;
+        }
+
+        .notice strong {
+            color: var(--accent);
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 25px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .cdk-display {
+                font-size: 0.95rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">🎉</div>
+        <h1>捐赠成功！</h1>
+        <p class="subtitle">感谢您的贡献！</p>
+
+        <div class="email-display" id="emailDisplay">
+            账号：<strong id="userEmail">-</strong>
+        </div>
+
+        <div class="cdk-section">
+            <h3>🎫 您的专属 CDK</h3>
+            <div class="cdk-display" id="cdkDisplay" onclick="copyToClipboard()">
+                加载中...
+            </div>
+            <p class="copy-hint" id="copyHint">点击上方复制 CDK</p>
+        </div>
+
+        <a href="/" class="back-btn">← 返回首页</a>
+
+        <div class="notice">
+            <strong>⚠️ 请妥善保管您的 CDK</strong><br>
+            CDK 只会显示一次，请立即复制保存。如有问题请联系管理员。
+        </div>
+    </div>
+
+    <script>
+        // 从 URL 参数获取 CDK 和邮箱
+        const urlParams = new URLSearchParams(window.location.search);
+        const cdk = urlParams.get('cdk');
+        const email = urlParams.get('email');
+
+        if (cdk) {
+            document.getElementById('cdkDisplay').textContent = cdk;
+        } else {
+            document.getElementById('cdkDisplay').textContent = '无法获取 CDK';
+        }
+
+        if (email) {
+            document.getElementById('userEmail').textContent = email;
+        }
+
+        function copyToClipboard() {
+            const cdkText = document.getElementById('cdkDisplay').textContent;
+            if (cdkText && cdkText !== '加载中...' && cdkText !== '无法获取 CDK') {
+                navigator.clipboard.writeText(cdkText).then(() => {
+                    const hint = document.getElementById('copyHint');
+                    hint.textContent = '✓ 已复制到剪贴板！';
+                    hint.classList.add('copied');
+                    setTimeout(() => {
+                        hint.textContent = '点击上方复制 CDK';
+                        hint.classList.remove('copied');
+                    }, 3000);
+                }).catch(err => {
+                    console.error('复制失败:', err);
+                    alert('复制失败，请手动选择复制');
+                });
+            }
+        }
+
+        // 加载站点配置设置背景
+        async function loadSiteConfig() {
+            try {
+                const response = await fetch('/api/site-config');
+                const config = await response.json();
+                
+                if (config.background_image) {
+                    document.body.style.backgroundImage = `url('${config.background_image}')`;
+                }
+            } catch (error) {
+                console.error('Failed to load site config:', error);
+            }
+        }
+
+        loadSiteConfig();
+    </script>
+</body>
+</html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>凭证捐赠站</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎁</text></svg>">
+</head>
+<body>
+
+    <!-- 主题切换器 -->
+    <div class="theme-switcher">
+        <div class="theme-btn t-light" onclick="setTheme('light')" title="晨曦微光 (清新)"></div>
+        <div class="theme-btn t-ocean" onclick="setTheme('ocean')" title="深海极光"></div>
+        <div class="theme-btn t-gold" onclick="setTheme('gold')" title="虚空暗金"></div>
+        <div class="theme-btn t-neon" onclick="setTheme('neon')" title="赛博霓虹"></div>
+    </div>
+
+    <div class="container">
+        <h1 id="siteName">凭证捐赠站</h1>
+        <p class="subtitle" id="siteSubtitle">感谢您的慷慨捐赠，让世界更美好</p>
+
+        <!-- 错误提示 -->
+        <div id="error-box" class="status-msg status-error"></div>
+        <div id="success-box" class="status-msg status-success"></div>
+
+        <!-- 步骤1: 选择渠道 -->
+        <div class="channel-grid" id="channel-container">
+            <div class="channel-card active" onclick="selectChannel('antigravity')" id="card-antigravity">
+                <img src="/static/images/antigravity.png" alt="Antigravity" class="channel-logo">
+                <span class="channel-name">Antigravity</span>
+            </div>
+            <div class="channel-card" onclick="selectChannel('gemini-cli')" id="card-gemini-cli">
+                <img src="/static/images/gemini-cli.png" alt="Gemini CLI" class="channel-logo">
+                <span class="channel-name">Gemini CLI</span>
+            </div>
+            <div class="channel-card" onclick="selectChannel('codex')" id="card-codex">
+                <div class="codex-logo-wrapper">
+                    <img src="/static/images/codex.svg" alt="Codex" class="channel-logo">
+                </div>
+                <span class="channel-name">Codex</span>
+            </div>
+        </div>
+
+        <!-- 步骤2: 选择CDK分组 (动态加载) -->
+        <div class="cdk-group-selector" id="group-selector-container" style="display:none;">
+            <label>选择奖励类型</label>
+            <select id="cdk-group-select">
+                <!-- 动态填充 -->
+            </select>
+        </div>
+
+        <!-- 主按钮 -->
+        <button id="start-btn" class="btn-primary" onclick="startAuth()">
+            🚀 开始捐赠
+        </button>
+
+        <!-- 凭证统计 -->
+        <div class="home-stats">
+            <div class="home-stat-item">
+                <span class="home-stat-value" id="homeCredentialCount">-</span>
+                <span class="home-stat-label">已收录凭证</span>
+            </div>
+        </div>
+
+        <p class="footer-text">
+            Server Status: <span style="color:var(--success-text)">● Online</span>
+        </p>
+    </div>
+
+    <script>
+        // 全局状态
+        let selectedType = 'antigravity';
+        let siteConfig = {};
+        
+        // 主题逻辑
+        function setTheme(theme) {
+            document.body.removeAttribute('data-theme');
+            if (theme !== 'ocean') document.body.setAttribute('data-theme', theme);
+            document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.t-${theme}`).classList.add('active');
+            localStorage.setItem('site-theme', theme);
+        }
+        
+        // 初始化主题 - 默认为 light
+        const savedTheme = localStorage.getItem('site-theme') || 'light';
+        setTheme(savedTheme);
+
+        // 加载配置
+        async function loadSiteConfig() {
+            try {
+                const res = await fetch('/api/site-config');
+                siteConfig = await res.json();
+                // 更新标题和副标题
+                if (siteConfig.site_name) {
+                    document.getElementById('siteName').textContent = siteConfig.site_name;
+                }
+                if (siteConfig.site_subtitle) {
+                    document.getElementById('siteSubtitle').textContent = siteConfig.site_subtitle;
+                }
+                updateChannelStatus();
+            } catch (e) {
+                console.error('Failed to load config', e);
+            }
+        }
+        
+        async function loadChannels() {
+             try {
+                const response = await fetch('/api/channels');
+                const channels = await response.json();
+                
+                // 遍历并更新UI
+                for (const [key, enabled] of Object.entries(channels)) {
+                    // key 比如 "channel_antigravity"
+                    const type = key.replace('channel_', '');
+                    const card = document.getElementById(`card-${type}`);
+                    if (card) {
+                        if (!enabled) {
+                            card.classList.add('disabled');
+                            card.title = '该渠道暂时关闭';
+                            card.onclick = null;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load channels:', error);
+            }
+        }
+        
+        // 更新渠道状态（备用）
+        function updateChannelStatus() {}
+
+        // 切换渠道
+        function selectChannel(type) {
+            // 检查是否禁用
+            const card = document.getElementById(`card-${type}`);
+            if (card && card.classList.contains('disabled')) return;
+
+            selectedType = type;
+            document.querySelectorAll('.channel-card').forEach(el => el.classList.remove('active'));
+            document.getElementById(`card-${type}`).classList.add('active');
+            updateButtonText();
+        }
+
+        function updateButtonText() {
+            const btn = document.getElementById('start-btn');
+            if (selectedType === 'codex') {
+                 // 明确不显示 Google
+                 btn.innerHTML = '🚀 开始捐赠 - 前往授权';
+            } else {
+                 btn.innerHTML = '🚀 开始捐赠 - Google 登录';
+            }
+        }
+
+        // 加载CDK分组
+        async function loadCDKGroups() {
+            try {
+                const res = await fetch('/api/cdk-groups');
+                const groups = await res.json();
+                
+                const selector = document.getElementById('cdk-group-select');
+                const container = document.getElementById('group-selector-container');
+                
+                selector.innerHTML = '<option value="">随机分配 (默认)</option>';
+                
+                if (groups && groups.length > 0) {
+                    groups.forEach(g => {
+                        const opt = document.createElement('option');
+                        opt.value = g.id;
+                        opt.textContent = `${g.name} (${g.description || ''})`;
+                        selector.appendChild(opt);
+                    });
+                    container.style.display = 'block';
+                } else {
+                    container.style.display = 'none';
+                }
+            } catch (e) {
+                console.error('Failed to load groups', e);
+            }
+        }
+
+        // 开始授权
+        async function startAuth() {
+            const btn = document.getElementById('start-btn');
+            const groupSelect = document.getElementById('cdk-group-select');
+            
+            btn.disabled = true;
+            btn.innerHTML = '⏳ 正在获取授权链接...';
+            
+            try {
+                const body = { type: selectedType };
+                if (groupSelect.value) body.group_id = parseInt(groupSelect.value);
+                
+                const res = await fetch('/api/auth/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await res.json();
+                
+                if (data.success && data.auth_url) {
+                    window.open(data.auth_url, '_blank', 'width=600,height=700');
+                    window.location.href = `/waiting?state=${encodeURIComponent(data.state)}&type=${encodeURIComponent(selectedType)}`;
+                } else {
+                    alert('获取链接失败: ' + (data.message || '未知错误'));
+                    resetButton();
+                }
+            } catch (e) {
+                alert('网络错误');
+                resetButton();
+            }
+        }
+
+        function resetButton() {
+            updateButtonText();
+            document.getElementById('start-btn').disabled = false;
+        }
+
+        // Init
+        loadSiteConfig();
+        loadChannels();
+        loadCDKGroups();
+        loadHomeStats();
+        updateButtonText(); // Set initial text
+        
+        // 加载首页统计
+        async function loadHomeStats() {
+            try {
+                const res = await fetch('/api/public-stats');
+                const stats = await res.json();
+                document.getElementById('homeCredentialCount').textContent = stats.total_credentials || 0;
+            } catch (e) {
+                document.getElementById('homeCredentialCount').textContent = '-';
+            }
+        }
+    </script>
+
+    <!-- GitHub 悬浮球 -->
+    <a href="https://github.com/123nhh/prometheus-CPA" target="_blank" class="github-fab" title="GitHub 项目">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+        </svg>
+    </a>
+
+    <style>
+        .github-fab {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-decoration: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .github-fab:hover {
+            transform: scale(1.1);
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
+        }
+        .github-fab:active {
+            transform: scale(0.95);
+        }
+        /* 浅色主题适配 */
+        [data-theme="light"] .github-fab {
+            background: rgba(0, 0, 0, 0.08);
+            border-color: rgba(0, 0, 0, 0.1);
+            color: #333;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+        [data-theme="light"] .github-fab:hover {
+            background: rgba(0, 0, 0, 0.12);
+        }
+    </style>
+</body>
+</html>

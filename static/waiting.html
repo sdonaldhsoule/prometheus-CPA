@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>等待授权 - 凭证捐赠站</title>
+    <!-- 引用统一的样式表 -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎁</text></svg>">
+</head>
+<body>
+    <!-- 主题切换器 -->
+    <div class="theme-switcher">
+        <div class="theme-btn t-light" onclick="setTheme('light')" title="晨曦微光 (清新)"></div>
+        <div class="theme-btn t-ocean" onclick="setTheme('ocean')" title="深海极光"></div>
+        <div class="theme-btn t-gold" onclick="setTheme('gold')" title="虚空暗金"></div>
+        <div class="theme-btn t-neon" onclick="setTheme('neon')" title="赛博霓虹"></div>
+    </div>
+
+    <div class="container">
+        <h1 style="font-size:3rem; margin-bottom:10px;">🔐</h1>
+        <h1>完成授权</h1>
+        <p class="subtitle">请按照以下步骤完成凭证捐赠</p>
+
+        <div class="step-indicator">
+            <div class="step completed" id="step1">
+                <span class="step-num">✓</span>
+                <span>获取链接</span>
+            </div>
+            <div class="step active" id="step2">
+                <span class="step-num">2</span>
+                <span>扫码/登录</span>
+            </div>
+            <div class="step" id="step3">
+                <span class="step-num">3</span>
+                <span>提交回调</span>
+            </div>
+            <div class="step" id="step4">
+                <span class="step-num">4</span>
+                <span>领取CDK</span>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h4>📋 操作步骤</h4>
+            <ol>
+                <li>在新打开的窗口中完成账号授权</li>
+                <li>授权成功后，浏览器可能会显示无法访问或空白页</li>
+                <li>复制浏览器地址栏中的 <strong>完整URL</strong>（以 http 开头）</li>
+                <li>将URL粘贴到下方输入框，点击 <strong>"提交回调"</strong></li>
+            </ol>
+        </div>
+
+        <div class="status-message" id="statusMessage"></div>
+
+        <div class="callback-input-section" style="margin-bottom:20px;">
+            <label style="display:block; margin-bottom:10px; color:var(--text-primary); font-size:0.9rem;">
+                粘贴回调URL（授权完成后地址栏中的完整链接）
+            </label>
+            <textarea 
+                id="callbackInput" 
+                rows="3"
+                placeholder="http://localhost:51121/oauth-callback?state=xxx&code=xxx..."></textarea>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button class="submit-btn" id="submitBtn" onclick="submitCallback()">
+                📤 提交回调
+            </button>
+            <button class="btn-secondary" onclick="window.location.href='/'">
+                取消
+            </button>
+        </div>
+
+        <button class="complete-btn hidden" id="completeBtn" onclick="completeDonation()">
+            🎁 确认领取 CDK
+        </button>
+    </div>
+
+    <script>
+        const state = new URLSearchParams(window.location.search).get('state');
+
+        // 主题逻辑
+        function setTheme(theme) {
+            document.body.removeAttribute('data-theme');
+            if (theme !== 'ocean') document.body.setAttribute('data-theme', theme);
+            document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.t-${theme}`).classList.add('active');
+            localStorage.setItem('site-theme', theme);
+        }
+        setTheme(localStorage.getItem('site-theme') || 'light');
+
+        // 页面逻辑
+        function showMessage(msg, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = msg;
+            el.className = 'status-message show ' + type;
+        }
+
+        function updateStep(stepNum, status) {
+            const step = document.getElementById('step' + stepNum);
+            step.className = 'step ' + status;
+            if (status === 'completed') step.querySelector('.step-num').textContent = '✓';
+        }
+
+        async function submitCallback() {
+            const url = document.getElementById('callbackInput').value.trim();
+            if(!url) return showMessage('请粘贴回调URL', 'error');
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerText = '提交中...';
+
+            try {
+                const res = await fetch('/api/auth/callback', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ state, callback_url: url })
+                });
+                const data = await res.json();
+                
+                if(data.success) {
+                    showMessage('✅ 回调提交成功！请等待处理...', 'success');
+                    updateStep(2, 'completed');
+                    updateStep(3, 'completed');
+                    updateStep(4, 'active');
+                    btn.classList.add('hidden');
+                    document.getElementById('completeBtn').classList.remove('hidden');
+                } else {
+                    showMessage('❌ ' + (data.message || '失败'), 'error');
+                    btn.disabled = false; btn.innerText = '📤 提交回调';
+                }
+            } catch(e) {
+                showMessage('❌ 网络错误', 'error');
+                btn.disabled = false; btn.innerText = '📤 提交回调';
+            }
+        }
+
+        async function completeDonation() {
+            const btn = document.getElementById('completeBtn');
+            btn.disabled = true; btn.innerText = '处理中...';
+            
+            try {
+                const res = await fetch('/api/auth/complete', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ state })
+                });
+                const data = await res.json();
+                if(data.success && data.cdk) {
+                    window.location.href = `/success?cdk=${data.cdk}`;
+                } else {
+                    showMessage('❌ ' + (data.message || '领取失败'), 'error');
+                    btn.disabled = false; btn.innerText = '🎁 确认领取 CDK';
+                }
+            } catch(e) {
+                showMessage('❌ 网络错误', 'error');
+                btn.disabled = false; btn.innerText = '🎁 确认领取 CDK';
+            }
+        }
+
+        if (!state) document.location.href = '/error?message=missing_state';
+    </script>
+</body>
+</html>
