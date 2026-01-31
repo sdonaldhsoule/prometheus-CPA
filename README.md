@@ -506,7 +506,7 @@ BACKGROUND_IMAGE=https://example.com/your-image.jpg
 
 ## 📄 许可证
 
-MIT License
+GNU GPLv3
 
 ## 🤝 贡献
 
