@@ -1,7 +1,6 @@
 services:
   donation-station:
-    build: .
-    image: prometheus-cpa:latest
+    image: 123nhh/prometheus-cpa:latest
     container_name: prometheus-cpa
     restart: unless-stopped
     ports:
