@@ -1096,12 +1096,16 @@
             <div class="section">
                 <div class="section-header">
                     <h2>CDK列表</h2>
-                    <button class="refresh-btn" onclick="loadCdks()">🔄 刷新</button>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="refresh-btn" id="batchDeleteBtn" style="color: var(--error-text); display: none;" onclick="batchDeleteCdks()">🗑️ 删除选中 (<span id="selectedCount">0</span>)</button>
+                        <button class="refresh-btn" onclick="loadCdks()">🔄 刷新</button>
+                    </div>
                 </div>
                 <div class="section-body">
                     <table>
                         <thead>
                             <tr>
+                                <th style="width: 40px;"><input type="checkbox" id="selectAllCdks" onchange="toggleSelectAll(this)"></th>
                                 <th>ID</th>
                                 <th>CDK码</th>
                                 <th>分组</th>
@@ -1187,6 +1191,17 @@
                             </div>
                             <label class="switch">
                                 <input type="checkbox" id="channel_codex" onchange="toggleChannel('codex', this.checked)" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="channel-item" style="display: flex; align-items: center; justify-content: space-between; padding: 15px; background: var(--bg-secondary); border-radius: 12px;">
+                            <div>
+                                <span style="font-size: 1.5rem; margin-right: 10px;">🍪</span>
+                                <strong>iFlow</strong>
+                                <span style="color: var(--text-secondary); margin-left: 10px;">iFlow Cookie 登录</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="channel_iflow" onchange="toggleChannel('iflow', this.checked)" checked>
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -1334,11 +1349,13 @@
                 const result = await response.json();
                 
                 const tbody = document.getElementById('cdksTable');
+                document.getElementById('selectAllCdks').checked = false;
+                updateSelectedCount();
                 
                 if (!result.data || result.data.length === 0) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="7">
+                            <td colspan="8">
                                 <div class="empty-state">
                                     <div class="icon">📭</div>
                                     <p>暂无CDK数据</p>
@@ -1351,6 +1368,7 @@
                 
                 tbody.innerHTML = result.data.map(cdk => `
                     <tr>
+                        <td><input type="checkbox" class="cdk-checkbox" value="${cdk.id}" onchange="updateSelectedCount()"></td>
                         <td>${cdk.id}</td>
                         <td><code style="background: var(--bg-secondary); padding: 5px 10px; border-radius: 4px;">${cdk.code}</code></td>
                         <td>${cdk.group_name || '-'}</td>
@@ -1358,7 +1376,7 @@
                         <td><span class="badge badge-${cdk.is_used ? 'warning' : 'success'}">${cdk.is_used ? '已使用' : '可用'}</span></td>
                         <td>${formatDate(cdk.created_at)}</td>
                         <td>
-                            ${!cdk.is_used ? `<button class="refresh-btn" style="color: var(--error-text);" onclick="deleteCdk(${cdk.id})">删除</button>` : '-'}
+                            <button class="refresh-btn" style="color: var(--error-text);" onclick="deleteCdk(${cdk.id})">删除</button>
                         </td>
                     </tr>
                 `).join('');
@@ -1550,6 +1568,56 @@
             }
         }
 
+        // 全选/取消全选
+        function toggleSelectAll(checkbox) {
+            const checkboxes = document.querySelectorAll('.cdk-checkbox');
+            checkboxes.forEach(cb => cb.checked = checkbox.checked);
+            updateSelectedCount();
+        }
+
+        // 更新选中数量
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('.cdk-checkbox:checked');
+            const count = checkboxes.length;
+            document.getElementById('selectedCount').textContent = count;
+            document.getElementById('batchDeleteBtn').style.display = count > 0 ? 'inline-block' : 'none';
+        }
+
+        // 批量删除CDK
+        async function batchDeleteCdks() {
+            const checkboxes = document.querySelectorAll('.cdk-checkbox:checked');
+            const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            
+            if (ids.length === 0) {
+                alert('请先选择要删除的CDK');
+                return;
+            }
+            
+            if (!confirm(`确定要删除选中的 ${ids.length} 个CDK吗？此操作不可恢复！`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/cdks/batch-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids })
+                });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showImportResult('success', `成功删除 ${result.deleted} 个CDK`);
+                    loadCdks();
+                    loadStats();
+                    loadCdkGroups();
+                } else {
+                    alert('批量删除失败: ' + result.error);
+                }
+            } catch (error) {
+                alert('批量删除失败: ' + error.message);
+            }
+        }
+
         // 删除CDK
         async function deleteCdk(id) {
             if (!confirm('确定要删除这个CDK吗？')) {
@@ -1651,7 +1719,7 @@
                         </div>
                         <div class="group-card-footer">
                             <span class="group-card-time">创建于 ${formatDate(g.created_at)}</span>
-                            <button class="group-delete-btn" onclick="deleteGroup(${g.id})">删除</button>
+                            <button class="group-delete-btn" onclick="deleteGroup(${g.id}, '${g.name.replace(/'/g, "\\'")}', ${g.cdk_count})">删除</button>
                         </div>
                     </div>
                 `).join('');
@@ -1689,13 +1757,34 @@
             }
         }
 
-        async function deleteGroup(id) {
-            if (!confirm('确定要删除这个分组吗？分组内不能有CDK才可删除。')) {
+        async function deleteGroup(id, groupName, cdkCount) {
+            // 第一次确认
+            let confirmMsg = `确定要删除分组「${groupName}」吗？`;
+            if (cdkCount > 0) {
+                confirmMsg += `\n\n⚠️ 该分组内有 ${cdkCount} 个CDK，将被一并删除！`;
+            }
+            
+            if (!confirm(confirmMsg)) {
                 return;
             }
             
+            // 如果有CDK，进行二次确认
+            if (cdkCount > 0) {
+                const doubleConfirm = prompt(`该操作不可恢复！\n请输入「${groupName}」确认删除：`);
+                if (doubleConfirm !== groupName) {
+                    if (doubleConfirm !== null) {
+                        alert('输入不匹配，删除已取消');
+                    }
+                    return;
+                }
+            }
+            
             try {
-                const response = await fetch(`/api/admin/cdk-groups/${id}`, {
+                const url = cdkCount > 0 
+                    ? `/api/admin/cdk-groups/${id}?force=true`
+                    : `/api/admin/cdk-groups/${id}`;
+                    
+                const response = await fetch(url, {
                     method: 'DELETE'
                 });
                 
@@ -1719,6 +1808,7 @@
                 document.getElementById('channel_antigravity').checked = channels.antigravity !== false;
                 document.getElementById('channel_gemini_cli').checked = channels.gemini_cli !== false;
                 document.getElementById('channel_codex').checked = channels.codex !== false;
+                document.getElementById('channel_iflow').checked = channels.iflow !== false;
             } catch (error) {
                 console.error('Failed to load channels:', error);
             }

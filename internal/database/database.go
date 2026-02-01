@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -503,6 +504,30 @@ func (db *DB) DeleteCDK(id int64) error {
 	return nil
 }
 
+// BatchDeleteCDK 批量删除CDK
+func (db *DB) BatchDeleteCDK(ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	
+	// 构建 IN 子句的占位符
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+	
+	query := fmt.Sprintf(`DELETE FROM cdks WHERE id IN (%s)`, strings.Join(placeholders, ","))
+	result, err := db.Exec(query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to batch delete CDKs: %w", err)
+	}
+	
+	affected, _ := result.RowsAffected()
+	return affected, nil
+}
+
 // ====== CDK分组管理 ======
 
 // CreateCDKGroup 创建CDK分组
@@ -585,4 +610,27 @@ func (db *DB) DeleteCDKGroup(id int64) error {
 		return fmt.Errorf("failed to delete CDK group: %w", err)
 	}
 	return nil
+}
+
+// DeleteCDKGroupWithCDKs 强制删除CDK分组及其所有CDK
+func (db *DB) DeleteCDKGroupWithCDKs(id int64) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	
+	// 先删除分组内所有CDK
+	_, err = tx.Exec(`DELETE FROM cdks WHERE group_id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete CDKs in group: %w", err)
+	}
+	
+	// 再删除分组
+	_, err = tx.Exec(`DELETE FROM cdk_groups WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete CDK group: %w", err)
+	}
+	
+	return tx.Commit()
 }

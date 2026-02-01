@@ -98,6 +98,60 @@ func (c *Client) GetCodexAuthURL(ctx context.Context) (*AuthURLResponse, error) 
 	return c.getAuthURL(ctx, "/v0/management/codex-auth-url")
 }
 
+// IFlowAuthResponse iFlow Cookie登录响应
+type IFlowAuthResponse struct {
+	Status    string `json:"status"`
+	SavedPath string `json:"saved_path"`
+	Email     string `json:"email"`
+	Expired   string `json:"expired"`
+	Type      string `json:"type"`
+	Error     string `json:"error,omitempty"`
+}
+
+// SubmitIFlowCookie 提交iFlow Cookie进行登录
+func (c *Client) SubmitIFlowCookie(ctx context.Context, cookie string) (*IFlowAuthResponse, error) {
+	body := map[string]string{"cookie": cookie}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request failed: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v0/management/iflow-auth-url", strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return nil, fmt.Errorf("create request failed: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.managementKey)
+	req.Header.Set("X-Management-Key", c.managementKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response failed: %w", err)
+	}
+
+	var result IFlowAuthResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse response failed: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK || result.Status != "ok" {
+		errMsg := result.Error
+		if errMsg == "" {
+			errMsg = string(respBody)
+		}
+		return nil, fmt.Errorf("iFlow auth failed: %s", errMsg)
+	}
+
+	return &result, nil
+}
+
 func (c *Client) getAuthURL(ctx context.Context, endpoint string) (*AuthURLResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+endpoint, nil)
 	if err != nil {

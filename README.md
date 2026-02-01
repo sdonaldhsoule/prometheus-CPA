@@ -9,8 +9,8 @@
 
 - 🔗 **CPA 集成** - 通过调用 CPA 管理 API 获取 OAuth 授权链接
 - 🎫 **CDK 生成** - 凭证授权成功后自动生成唯一 CDK
-- � **CDK 分组** - 支持创建分组管理不同用途的 CDK
-- 🔔 **回调通知** - 支持配置回调接口，CDK 生成后自动通知目标系统
+- � **CDK 分组** - 支持创建分组管理不同用途的 CDK- 🔄 **CDK 自动补充** - CDK 用完时自动创建"待兑换"分组并生成新 CDK
+- 🍪 **iFlow Cookie 登录** - 支持通过 Cookie 直接登录 iFlow- 🔔 **回调通知** - 支持配置回调接口，CDK 生成后自动通知目标系统
 - 🚫 **去重检查** - 基于授权状态哈希，自动检测重复领取
 - 🎨 **多主题支持** - 4 款精美主题可切换（晨曦微光、深海极光、虚空暗金、赛博霓虹）
 - 🖼️ **自定义背景** - 支持自定义网页背景图片
@@ -21,7 +21,8 @@
 ## 🖼️ 界面预览
 
 ### 首页
-- 三大渠道选择卡片（Antigravity、Gemini CLI、Codex）
+- 四大渠道选择卡片（Antigravity、Gemini CLI、Codex、iFlow）
+- CDK 分组选择（可选择不同奖励类型）
 - 实时显示已收录凭证数量
 - 主题切换悬浮球
 
@@ -34,15 +35,21 @@
 
 ## 🔄 工作流程
 
+**OAuth 授权流程** (Antigravity / Gemini CLI / Codex):
 ```
 用户 → 捐赠站 → CPA (获取OAuth链接) → Google授权 → CPA (处理凭证) → 捐赠站 (生成CDK)
 ```
 
-1. 用户在捐赠站选择凭证类型，点击"开始捐赠"
-2. 捐赠站调用 CPA 的管理 API 获取 OAuth 授权链接
-3. 用户跳转到 Google 完成授权
-4. CPA 接收回调并处理凭证
-5. 捐赠站检测授权完成，生成 CDK 并展示给用户
+**iFlow Cookie 流程**:
+```
+用户 → 捐赠站 (提交Cookie) → CPA (验证Cookie) → 捐赠站 (生成CDK)
+```
+
+1. 用户在捐赠站选择凭证类型和 CDK 分组（可选）
+2. **OAuth 渠道**: 捐赠站调用 CPA 获取授权链接，用户完成 Google 授权
+3. **iFlow 渠道**: 用户直接提交 Cookie，CPA 验证并保存凭证
+4. 捐赠站检测授权完成，从指定分组获取/生成 CDK 并展示给用户
+5. 如果 CDK 用完，自动创建"待兑换"分组并生成新 CDK
 
 ## 🏗️ 技术栈
 
@@ -374,7 +381,8 @@ POST /api/auth/start
 Content-Type: application/json
 
 {
-  "type": "antigravity"  // 或 "gemini_cli"
+  "type": "antigravity",  // 或 "gemini_cli", "gemini-cli", "codex"
+  "group_id": 1           // 可选，指定 CDK 分组
 }
 ```
 
@@ -388,6 +396,26 @@ Content-Type: application/json
 ```
 
 前端获取到 `auth_url` 后打开新窗口跳转到 Google 授权，然后跳转到等待页面。
+
+#### iFlow Cookie 登录
+```
+POST /api/auth/iflow
+Content-Type: application/json
+
+{
+  "cookie": "BXAuth=...",  // iFlow Cookie，必须以 BXAuth= 开头
+  "group_id": 1            // 可选，指定 CDK 分组
+}
+```
+
+响应:
+```json
+{
+  "success": true,
+  "cdk": "DS-XXXX-XXXX-XXXX-XXXX-1234",
+  "email": "user@example.com"
+}
+```
 
 #### 查询授权状态
 ```
@@ -501,6 +529,7 @@ BACKGROUND_IMAGE=https://example.com/your-image.jpg
 
 - `credentials` - 凭证记录表
 - `cdks` - CDK 记录表
+- `cdk_groups` - CDK 分组表
 - `callback_logs` - 回调日志表
 - `site_config` - 站点配置表
 
