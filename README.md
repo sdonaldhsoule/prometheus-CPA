@@ -208,10 +208,6 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
-等待几秒钟让服务初始化完成，你会看到类似这样的日志：
-```
-donation-station  | [GIN] Listening and serving HTTP on :8080
-```
 
 #### 第五步：访问服务
 
