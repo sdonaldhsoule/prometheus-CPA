@@ -33,7 +33,7 @@ func TestClientAuthenticate(t *testing.T) {
 				Path:  "/",
 			})
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"success":true}`))
+			_, _ = w.Write([]byte(`{"success":true,"data":{"token":"user_access_token","user":{"id":42,"username":"alice","email":"alice@example.com","display_name":"Alice"}}}`))
 
 		case "/api/user/self":
 			cookie, err := r.Cookie("new-api-session")
@@ -42,6 +42,9 @@ func TestClientAuthenticate(t *testing.T) {
 			}
 			if cookie.Value != "cookie-token" {
 				t.Fatalf("unexpected cookie value: %s", cookie.Value)
+			}
+			if got := r.Header.Get("New-Api-User"); got != "42" {
+				t.Fatalf("expected New-Api-User header 42, got %q", got)
 			}
 
 			w.Header().Set("Content-Type", "application/json")
