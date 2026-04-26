@@ -127,6 +127,10 @@
                     btn.classList.add('hidden');
                     document.getElementById('completeBtn').classList.remove('hidden');
                 } else {
+                    if (res.status === 401) {
+                        showMessage('❌ 登录状态已失效，请返回首页重新登录', 'error');
+                        return;
+                    }
                     showMessage('❌ ' + (data.message || '失败'), 'error');
                     btn.disabled = false; btn.innerText = '📤 提交回调';
                 }
@@ -148,8 +152,12 @@
                 });
                 const data = await res.json();
                 if(data.success && data.cdk) {
-                    window.location.href = `/success?cdk=${data.cdk}`;
+                    window.location.href = `/success?cdk=${encodeURIComponent(data.cdk)}&email=${encodeURIComponent(data.email || '')}`;
                 } else {
+                    if (res.status === 401) {
+                        showMessage('❌ 登录状态已失效，请返回首页重新登录', 'error');
+                        return;
+                    }
                     showMessage('❌ ' + (data.message || '领取失败'), 'error');
                     btn.disabled = false; btn.innerText = '🎁 确认领取 CDK';
                 }

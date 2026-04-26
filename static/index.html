@@ -25,6 +25,37 @@
         <div id="error-box" class="status-msg status-error"></div>
         <div id="success-box" class="status-msg status-success"></div>
 
+        <div class="auth-panel" id="loginPanel">
+            <div class="auth-panel-header">
+                <div>
+                    <span class="auth-kicker">NewAPI 账号</span>
+                    <div class="auth-title">先登录，再上传凭证</div>
+                </div>
+            </div>
+            <div class="auth-form">
+                <div class="auth-form-row">
+                    <input class="auth-input" id="loginUsername" type="text" placeholder="NewAPI 用户名">
+                    <input class="auth-input" id="loginPassword" type="password" placeholder="NewAPI 密码">
+                </div>
+                <div class="auth-actions">
+                    <button class="btn-primary compact-btn" id="loginBtn" onclick="login()">登录</button>
+                </div>
+                <span class="helper-note">登录成功后，当前页面才会开放 OAuth / iFlow 上传入口。</span>
+            </div>
+        </div>
+
+        <div class="user-banner hidden" id="userBanner">
+            <div>
+                <span class="auth-kicker">当前登录</span>
+                <div class="auth-title" id="currentUserName">-</div>
+                <span class="helper-note" id="currentUserMeta">-</span>
+            </div>
+            <div class="auth-actions">
+                <button class="btn-secondary compact-btn" onclick="window.location.href='/my-credentials'">我的凭证</button>
+                <button class="btn-secondary compact-btn" onclick="logout()">退出登录</button>
+            </div>
+        </div>
+
         <!-- 步骤1: 选择渠道 -->
         <div class="channel-grid" id="channel-container">
             <div class="channel-card active" onclick="selectChannel('antigravity')" id="card-antigravity">
@@ -62,9 +93,14 @@
         </div>
 
         <!-- 主按钮 -->
-        <button id="start-btn" class="btn-primary" onclick="startAuth()">
-            🚀 开始捐赠
+        <button id="start-btn" class="btn-primary" onclick="startAuth()" disabled>
+            🔐 请先登录
         </button>
+
+        <div class="warning-box">
+            <strong>凭证管理说明</strong>
+            <p>上传后的凭证可在“我的凭证”页面查看和移除。本期“移除”仅影响本站列表展示，不会删除 CPA 远端真实凭证。</p>
+        </div>
 
         <!-- 凭证统计 -->
         <div class="home-stats">
@@ -83,6 +119,7 @@
         // 全局状态
         let selectedType = 'antigravity';
         let siteConfig = {};
+        let currentUser = null;
         
         // 主题逻辑
         function setTheme(theme) {
@@ -112,6 +149,110 @@
                 updateChannelStatus();
             } catch (e) {
                 console.error('Failed to load config', e);
+            }
+        }
+
+        function showMessage(type, text) {
+            const successBox = document.getElementById('success-box');
+            const errorBox = document.getElementById('error-box');
+
+            successBox.style.display = 'none';
+            errorBox.style.display = 'none';
+
+            if (!text) return;
+
+            if (type === 'success') {
+                successBox.textContent = text;
+                successBox.style.display = 'block';
+            } else {
+                errorBox.textContent = text;
+                errorBox.style.display = 'block';
+            }
+        }
+
+        function setAuthUI(user) {
+            currentUser = user || null;
+
+            const loginPanel = document.getElementById('loginPanel');
+            const userBanner = document.getElementById('userBanner');
+            const startBtn = document.getElementById('start-btn');
+
+            if (currentUser) {
+                loginPanel.classList.add('hidden');
+                userBanner.classList.remove('hidden');
+                document.getElementById('currentUserName').textContent = currentUser.display_name || currentUser.username;
+                document.getElementById('currentUserMeta').textContent = currentUser.email || `NewAPI 用户 #${currentUser.newapi_user_id}`;
+                startBtn.disabled = false;
+            } else {
+                loginPanel.classList.remove('hidden');
+                userBanner.classList.add('hidden');
+                startBtn.disabled = true;
+            }
+
+            updateButtonText();
+        }
+
+        async function loadCurrentUser() {
+            try {
+                const response = await fetch('/api/user/me');
+                if (!response.ok) {
+                    setAuthUI(null);
+                    return;
+                }
+
+                const user = await response.json();
+                setAuthUI(user);
+            } catch (error) {
+                console.error('Failed to load current user:', error);
+                setAuthUI(null);
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const loginBtn = document.getElementById('loginBtn');
+
+            if (!username || !password) {
+                showMessage('error', '请输入 NewAPI 用户名和密码');
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登录中...';
+            showMessage('', '');
+
+            try {
+                const response = await fetch('/api/user/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || '登录失败');
+                }
+
+                document.getElementById('loginPassword').value = '';
+                setAuthUI(result.user);
+                showMessage('success', '登录成功，现在可以开始上传凭证了');
+            } catch (error) {
+                showMessage('error', error.message || '登录失败');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登录';
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/user/logout', { method: 'POST' });
+            } catch (error) {
+                console.error('Failed to logout:', error);
+            } finally {
+                setAuthUI(null);
+                showMessage('success', '已退出登录');
             }
         }
         
@@ -182,6 +323,10 @@
 
         function updateButtonText() {
             const btn = document.getElementById('start-btn');
+            if (!currentUser) {
+                btn.innerHTML = '🔐 请先登录';
+                return;
+            }
             if (selectedType === 'iflow') {
                 btn.innerHTML = '🚀 提交 Cookie 登录';
             } else if (selectedType === 'codex') {
@@ -223,6 +368,11 @@
         async function startAuth() {
             const btn = document.getElementById('start-btn');
             const groupSelect = document.getElementById('cdk-group-select');
+
+            if (!currentUser) {
+                showMessage('error', '请先登录 NewAPI 账号');
+                return;
+            }
             
             // iFlow 特殊处理：直接提交 Cookie
             if (selectedType === 'iflow') {
@@ -256,13 +406,16 @@
                     
                     if (data.success) {
                         // 直接跳转到成功页面
-                        window.location.href = `/success?cdk=${encodeURIComponent(data.cdk)}&type=iflow`;
+                        window.location.href = `/success?cdk=${encodeURIComponent(data.cdk)}&type=iflow&email=${encodeURIComponent(data.email || '')}`;
                     } else {
-                        alert('提交失败: ' + (data.message || '未知错误'));
-                        resetButton();
+                        if (res.status === 401) {
+                            setAuthUI(null);
+                            throw new Error('登录状态已过期，请重新登录');
+                        }
+                        throw new Error(data.message || '未知错误');
                     }
                 } catch (e) {
-                    alert('网络错误');
+                    showMessage('error', e.message || '网络错误');
                     resetButton();
                 }
                 return;
@@ -287,18 +440,21 @@
                     window.open(data.auth_url, '_blank', 'width=600,height=700');
                     window.location.href = `/waiting?state=${encodeURIComponent(data.state)}&type=${encodeURIComponent(selectedType)}`;
                 } else {
-                    alert('获取链接失败: ' + (data.message || '未知错误'));
-                    resetButton();
+                    if (res.status === 401) {
+                        setAuthUI(null);
+                        throw new Error('登录状态已过期，请重新登录');
+                    }
+                    throw new Error(data.message || '未知错误');
                 }
             } catch (e) {
-                alert('网络错误');
+                showMessage('error', e.message || '网络错误');
                 resetButton();
             }
         }
 
         function resetButton() {
             updateButtonText();
-            document.getElementById('start-btn').disabled = false;
+            document.getElementById('start-btn').disabled = !currentUser;
         }
 
         // Init
@@ -306,6 +462,7 @@
         loadChannels();
         loadCDKGroups();
         loadHomeStats();
+        loadCurrentUser();
         updateButtonText(); // Set initial text
         
         // 加载首页统计

@@ -1020,8 +1020,10 @@
                                 <th>ID</th>
                                 <th>类型</th>
                                 <th>邮箱</th>
+                                <th>归属用户</th>
                                 <th>项目ID</th>
                                 <th>状态</th>
+                                <th>用户侧状态</th>
                                 <th>创建时间</th>
                             </tr>
                         </thead>
@@ -1312,7 +1314,7 @@
                 if (!result.data || result.data.length === 0) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="6">
+                            <td colspan="8">
                                 <div class="empty-state">
                                     <div class="icon">📭</div>
                                     <p>暂无凭证数据</p>
@@ -1328,8 +1330,10 @@
                         <td>${cred.id}</td>
                         <td><span class="badge badge-info">${cred.type}</span></td>
                         <td>${cred.email}</td>
+                        <td>${cred.owner_username || '-'}</td>
                         <td>${cred.project_id}</td>
                         <td><span class="badge badge-${getStatusClass(cred.status)}">${cred.status}</span></td>
+                        <td><span class="badge badge-${cred.removed_at ? 'warning' : 'success'}">${cred.removed_at ? '已被用户移除' : '显示中'}</span></td>
                         <td>${formatDate(cred.created_at)}</td>
                     </tr>
                 `).join('');

@@ -21,6 +21,7 @@ const (
 	CredentialTypeAntigravity CredentialType = "antigravity"
 	CredentialTypeGeminiCLI   CredentialType = "gemini_cli"
 	CredentialTypeCodex       CredentialType = "codex"
+	CredentialTypeIFlow       CredentialType = "iflow"
 )
 
 // CredentialStatus 凭证状态
@@ -42,8 +43,22 @@ type Credential struct {
 	CredentialHash string           `json:"-"` // 凭证哈希，不暴露
 	Status         CredentialStatus `json:"status"`
 	CDKID          *int64           `json:"cdk_id,omitempty"`
+	OwnerUserID    *int64           `json:"owner_user_id,omitempty"`
+	OwnerUsername  string           `json:"owner_username,omitempty"`
+	RemovedAt      *time.Time       `json:"removed_at,omitempty"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`
+}
+
+// AppUser 绑定到本站的 NewAPI 用户
+type AppUser struct {
+	ID           int64     `json:"id"`
+	NewAPIUserID string    `json:"newapi_user_id"`
+	Username     string    `json:"username"`
+	Email        string    `json:"email,omitempty"`
+	DisplayName  string    `json:"display_name,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // CDK CDK模型
@@ -60,12 +75,12 @@ type CDK struct {
 
 // CDKGroup CDK分组模型
 type CDKGroup struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	CDKCount    int       `json:"cdk_count,omitempty"`
-	AvailableCount int    `json:"available_count,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID             int64     `json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	CDKCount       int       `json:"cdk_count,omitempty"`
+	AvailableCount int       `json:"available_count,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // Init 初始化数据库连接
@@ -109,9 +124,30 @@ func (db *DB) initTables() error {
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 			updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 		)`,
+		`CREATE TABLE IF NOT EXISTS app_users (
+			id SERIAL PRIMARY KEY,
+			newapi_user_id VARCHAR(100) NOT NULL UNIQUE,
+			username VARCHAR(255) NOT NULL,
+			email VARCHAR(255),
+			display_name VARCHAR(255),
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_app_users_newapi_user_id ON app_users(newapi_user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_app_users_username ON app_users(username)`,
+		`DO $$ BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='credentials' AND column_name='owner_user_id') THEN
+				ALTER TABLE credentials ADD COLUMN owner_user_id INTEGER REFERENCES app_users(id);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='credentials' AND column_name='removed_at') THEN
+				ALTER TABLE credentials ADD COLUMN removed_at TIMESTAMP WITH TIME ZONE;
+			END IF;
+		END $$`,
 		`CREATE INDEX IF NOT EXISTS idx_credentials_hash ON credentials(credential_hash)`,
 		`CREATE INDEX IF NOT EXISTS idx_credentials_email ON credentials(email)`,
 		`CREATE INDEX IF NOT EXISTS idx_credentials_status ON credentials(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_credentials_owner_user_id ON credentials(owner_user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_credentials_removed_at ON credentials(removed_at)`,
 		`CREATE TABLE IF NOT EXISTS cdks (
 			id SERIAL PRIMARY KEY,
 			code VARCHAR(100) NOT NULL UNIQUE,
@@ -161,6 +197,35 @@ func (db *DB) initTables() error {
 	return nil
 }
 
+// UpsertAppUser 创建或更新本站用户
+func (db *DB) UpsertAppUser(user *AppUser) (*AppUser, error) {
+	record := &AppUser{}
+	query := `
+		INSERT INTO app_users (newapi_user_id, username, email, display_name, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (newapi_user_id) DO UPDATE
+		SET username = EXCLUDED.username,
+			email = EXCLUDED.email,
+			display_name = EXCLUDED.display_name,
+			updated_at = NOW()
+		RETURNING id, newapi_user_id, username, COALESCE(email, ''), COALESCE(display_name, ''), created_at, updated_at
+	`
+
+	err := db.QueryRow(query, user.NewAPIUserID, user.Username, user.Email, user.DisplayName).Scan(
+		&record.ID,
+		&record.NewAPIUserID,
+		&record.Username,
+		&record.Email,
+		&record.DisplayName,
+		&record.CreatedAt,
+		&record.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert app user: %w", err)
+	}
+	return record, nil
+}
+
 // CheckCredentialExists 检查凭证是否已存在
 func (db *DB) CheckCredentialExists(credentialHash string) (bool, error) {
 	var exists bool
@@ -174,11 +239,11 @@ func (db *DB) CheckCredentialExists(credentialHash string) (bool, error) {
 // CreateCredential 创建凭证记录
 func (db *DB) CreateCredential(cred *Credential) error {
 	query := `
-		INSERT INTO credentials (type, email, project_id, credential_hash, status)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO credentials (type, email, project_id, credential_hash, status, owner_user_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at
 	`
-	err := db.QueryRow(query, cred.Type, cred.Email, cred.ProjectID, cred.CredentialHash, cred.Status).
+	err := db.QueryRow(query, cred.Type, cred.Email, cred.ProjectID, cred.CredentialHash, cred.Status, cred.OwnerUserID).
 		Scan(&cred.ID, &cred.CreatedAt, &cred.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create credential: %w", err)
@@ -203,11 +268,11 @@ func (db *DB) UpdateCredentialStatus(id int64, status CredentialStatus, cdkID *i
 // GetCredentialByID 根据ID获取凭证
 func (db *DB) GetCredentialByID(id int64) (*Credential, error) {
 	cred := &Credential{}
-	query := `SELECT id, type, email, project_id, credential_hash, status, cdk_id, created_at, updated_at 
+	query := `SELECT id, type, email, project_id, credential_hash, status, cdk_id, owner_user_id, removed_at, created_at, updated_at 
 			  FROM credentials WHERE id = $1`
 	err := db.QueryRow(query, id).Scan(
 		&cred.ID, &cred.Type, &cred.Email, &cred.ProjectID, &cred.CredentialHash,
-		&cred.Status, &cred.CDKID, &cred.CreatedAt, &cred.UpdatedAt,
+		&cred.Status, &cred.CDKID, &cred.OwnerUserID, &cred.RemovedAt, &cred.CreatedAt, &cred.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -221,11 +286,11 @@ func (db *DB) GetCredentialByID(id int64) (*Credential, error) {
 // GetCredentialByHash 根据哈希获取凭证
 func (db *DB) GetCredentialByHash(hash string) (*Credential, error) {
 	cred := &Credential{}
-	query := `SELECT id, type, email, project_id, credential_hash, status, cdk_id, created_at, updated_at 
+	query := `SELECT id, type, email, project_id, credential_hash, status, cdk_id, owner_user_id, removed_at, created_at, updated_at 
 			  FROM credentials WHERE credential_hash = $1`
 	err := db.QueryRow(query, hash).Scan(
 		&cred.ID, &cred.Type, &cred.Email, &cred.ProjectID, &cred.CredentialHash,
-		&cred.Status, &cred.CDKID, &cred.CreatedAt, &cred.UpdatedAt,
+		&cred.Status, &cred.CDKID, &cred.OwnerUserID, &cred.RemovedAt, &cred.CreatedAt, &cred.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -245,9 +310,11 @@ func (db *DB) ListCredentials(limit, offset int) ([]*Credential, int, error) {
 	}
 
 	query := `
-		SELECT id, type, email, project_id, credential_hash, status, cdk_id, created_at, updated_at 
-		FROM credentials 
-		ORDER BY created_at DESC 
+		SELECT c.id, c.type, c.email, c.project_id, c.credential_hash, c.status, c.cdk_id,
+		       c.owner_user_id, COALESCE(u.username, ''), c.removed_at, c.created_at, c.updated_at
+		FROM credentials c
+		LEFT JOIN app_users u ON c.owner_user_id = u.id
+		ORDER BY c.created_at DESC 
 		LIMIT $1 OFFSET $2
 	`
 	rows, err := db.Query(query, limit, offset)
@@ -261,7 +328,7 @@ func (db *DB) ListCredentials(limit, offset int) ([]*Credential, int, error) {
 		cred := &Credential{}
 		err := rows.Scan(
 			&cred.ID, &cred.Type, &cred.Email, &cred.ProjectID, &cred.CredentialHash,
-			&cred.Status, &cred.CDKID, &cred.CreatedAt, &cred.UpdatedAt,
+			&cred.Status, &cred.CDKID, &cred.OwnerUserID, &cred.OwnerUsername, &cred.RemovedAt, &cred.CreatedAt, &cred.UpdatedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan credential: %w", err)
@@ -270,6 +337,61 @@ func (db *DB) ListCredentials(limit, offset int) ([]*Credential, int, error) {
 	}
 
 	return credentials, total, nil
+}
+
+// ListUserCredentials 获取当前用户可见的凭证列表
+func (db *DB) ListUserCredentials(userID int64, limit, offset int) ([]*Credential, int, error) {
+	var total int
+	err := db.QueryRow(`SELECT COUNT(*) FROM credentials WHERE owner_user_id = $1 AND removed_at IS NULL`, userID).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count user credentials: %w", err)
+	}
+
+	query := `
+		SELECT id, type, email, project_id, credential_hash, status, cdk_id, owner_user_id, removed_at, created_at, updated_at
+		FROM credentials
+		WHERE owner_user_id = $1 AND removed_at IS NULL
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+	rows, err := db.Query(query, userID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list user credentials: %w", err)
+	}
+	defer rows.Close()
+
+	var credentials []*Credential
+	for rows.Next() {
+		cred := &Credential{}
+		err := rows.Scan(
+			&cred.ID, &cred.Type, &cred.Email, &cred.ProjectID, &cred.CredentialHash,
+			&cred.Status, &cred.CDKID, &cred.OwnerUserID, &cred.RemovedAt, &cred.CreatedAt, &cred.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan user credential: %w", err)
+		}
+		credentials = append(credentials, cred)
+	}
+
+	return credentials, total, nil
+}
+
+// RemoveUserCredential 将凭证从用户视图中移除
+func (db *DB) RemoveUserCredential(userID, credentialID int64) (bool, error) {
+	result, err := db.Exec(`
+		UPDATE credentials
+		SET removed_at = NOW(), updated_at = NOW()
+		WHERE id = $1 AND owner_user_id = $2 AND removed_at IS NULL
+	`, credentialID, userID)
+	if err != nil {
+		return false, fmt.Errorf("failed to remove user credential: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to read remove result: %w", err)
+	}
+	return affected > 0, nil
 }
 
 // CreateCDK 创建CDK
@@ -392,7 +514,7 @@ func (db *DB) SetSiteConfig(key, value string) error {
 // GetStats 获取统计数据
 func (db *DB) GetStats() (map[string]int, error) {
 	stats := make(map[string]int)
-	
+
 	queries := map[string]string{
 		"total_credentials":    "SELECT COUNT(*) FROM credentials",
 		"pending_credentials":  "SELECT COUNT(*) FROM credentials WHERE status = 'pending'",
@@ -419,7 +541,7 @@ func (db *DB) GetAvailableCDK(groupID *int64) (*CDK, error) {
 	cdk := &CDK{}
 	var query string
 	var err error
-	
+
 	if groupID != nil {
 		query = `SELECT id, code, group_id, credential_id, is_used, created_at, used_at 
 				  FROM cdks 
@@ -435,7 +557,7 @@ func (db *DB) GetAvailableCDK(groupID *int64) (*CDK, error) {
 				  LIMIT 1`
 		err = db.QueryRow(query).Scan(&cdk.ID, &cdk.Code, &cdk.GroupID, &cdk.CredentialID, &cdk.IsUsed, &cdk.CreatedAt, &cdk.UsedAt)
 	}
-	
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -470,7 +592,7 @@ func (db *DB) AddCDK(code string, groupID *int64) error {
 func (db *DB) BatchAddCDKs(codes []string, groupID *int64) (int, int, error) {
 	added := 0
 	skipped := 0
-	
+
 	for _, code := range codes {
 		// 检查是否已存在
 		var exists bool
@@ -478,12 +600,12 @@ func (db *DB) BatchAddCDKs(codes []string, groupID *int64) (int, int, error) {
 		if err != nil {
 			return added, skipped, fmt.Errorf("failed to check CDK: %w", err)
 		}
-		
+
 		if exists {
 			skipped++
 			continue
 		}
-		
+
 		// 添加CDK
 		_, err = db.Exec(`INSERT INTO cdks (code, group_id, is_used) VALUES ($1, $2, false)`, code, groupID)
 		if err != nil {
@@ -491,7 +613,7 @@ func (db *DB) BatchAddCDKs(codes []string, groupID *int64) (int, int, error) {
 		}
 		added++
 	}
-	
+
 	return added, skipped, nil
 }
 
@@ -509,7 +631,7 @@ func (db *DB) BatchDeleteCDK(ids []int64) (int64, error) {
 	if len(ids) == 0 {
 		return 0, nil
 	}
-	
+
 	// 构建 IN 子句的占位符
 	placeholders := make([]string, len(ids))
 	args := make([]interface{}, len(ids))
@@ -517,13 +639,13 @@ func (db *DB) BatchDeleteCDK(ids []int64) (int64, error) {
 		placeholders[i] = fmt.Sprintf("$%d", i+1)
 		args[i] = id
 	}
-	
+
 	query := fmt.Sprintf(`DELETE FROM cdks WHERE id IN (%s)`, strings.Join(placeholders, ","))
 	result, err := db.Exec(query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to batch delete CDKs: %w", err)
 	}
-	
+
 	affected, _ := result.RowsAffected()
 	return affected, nil
 }
@@ -604,7 +726,7 @@ func (db *DB) DeleteCDKGroup(id int64) error {
 	if count > 0 {
 		return fmt.Errorf("该分组下还有 %d 个CDK，请先移除", count)
 	}
-	
+
 	_, err = db.Exec(`DELETE FROM cdk_groups WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete CDK group: %w", err)
@@ -619,18 +741,18 @@ func (db *DB) DeleteCDKGroupWithCDKs(id int64) error {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	// 先删除分组内所有CDK
 	_, err = tx.Exec(`DELETE FROM cdks WHERE group_id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete CDKs in group: %w", err)
 	}
-	
+
 	// 再删除分组
 	_, err = tx.Exec(`DELETE FROM cdk_groups WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete CDK group: %w", err)
 	}
-	
+
 	return tx.Commit()
 }

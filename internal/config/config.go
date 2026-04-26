@@ -31,6 +31,9 @@ type Config struct {
 	// CPA配置
 	CPABaseURL       string
 	CPAManagementKey string
+
+	// NewAPI 登录配置
+	NewAPIBaseURL string
 }
 
 // Load 从环境变量加载配置
@@ -47,6 +50,7 @@ func Load() (*Config, error) {
 		AdminPassword:    getEnvOrDefault("ADMIN_PASSWORD", "admin123"),
 		CPABaseURL:       getEnvOrDefault("CPA_BASE_URL", ""),
 		CPAManagementKey: getEnvOrDefault("CPA_MANAGEMENT_KEY", ""),
+		NewAPIBaseURL:    getEnvOrDefault("NEWAPI_BASE_URL", ""),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -59,6 +63,10 @@ func Load() (*Config, error) {
 
 	if cfg.CPAManagementKey == "" {
 		return nil, fmt.Errorf("CPA_MANAGEMENT_KEY is required")
+	}
+
+	if cfg.NewAPIBaseURL == "" {
+		return nil, fmt.Errorf("NEWAPI_BASE_URL is required")
 	}
 
 	return cfg, nil

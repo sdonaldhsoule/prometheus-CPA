@@ -10,6 +10,7 @@ services:
       - PORT=8080
       - CPA_BASE_URL=${CPA_BASE_URL:-}
       - CPA_MANAGEMENT_KEY=${CPA_MANAGEMENT_KEY:-}
+      - NEWAPI_BASE_URL=${NEWAPI_BASE_URL:-}
       - CALLBACK_URL=${CALLBACK_URL:-}
       - CALLBACK_SECRET=${CALLBACK_SECRET:-your-callback-secret}
       - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}

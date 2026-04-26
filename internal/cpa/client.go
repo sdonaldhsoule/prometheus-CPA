@@ -275,7 +275,7 @@ func (c *Client) WaitForAuthComplete(ctx context.Context, state, provider string
 		}
 
 		// 如果有错误消息，说明授权失败
-		if status.Message != "" && status.Message != "" {
+		if status.Message != "" {
 			return status, fmt.Errorf("auth failed: %s", status.Message)
 		}
 
